@@ -58,15 +58,24 @@ document.querySelector("#save").addEventListener("click", async () => {
     return;
   }
 
-  await saveConfig(validation.config);
-  state.config = validation.config;
-  render();
-  showStatus("已保存并应用。", "success");
+  try {
+    await saveConfig(validation.config);
+    state.config = validation.config;
+    render();
+    showStatus("已保存并应用。", "success");
+  } catch (error) {
+    showStatus(`保存失败：${error.message}`, "error");
+  }
 });
 
 document.querySelector("#export-config").addEventListener("click", () => {
   syncFromDom();
-  elements.configJson.value = JSON.stringify(normalizeConfig(state.config), null, 2);
+  const validation = validateConfig(state.config);
+  if (!validation.ok) {
+    showStatus(validation.errors.join("；"), "error");
+    return;
+  }
+  elements.configJson.value = JSON.stringify(normalizeConfig(validation.config), null, 2);
   showStatus("配置已导出到文本框。", "success");
 });
 
@@ -118,8 +127,12 @@ elements.enabled.addEventListener("change", () => {
 init();
 
 async function init() {
-  state.config = await loadConfig();
-  render();
+  try {
+    state.config = await loadConfig();
+    render();
+  } catch (error) {
+    showStatus(`加载配置失败：${error.message}`, "error");
+  }
 }
 
 function render() {

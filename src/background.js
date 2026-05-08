@@ -48,23 +48,28 @@ chrome.webRequest.onErrorOccurred.addListener(
 applyStoredConfig();
 
 async function applyStoredConfig() {
-  activeConfig = await loadConfig();
+  try {
+    activeConfig = await loadConfig();
 
-  if (!activeConfig.enabled) {
-    await setProxyConfig({ mode: "direct" });
-    updateBadge(false);
-    return;
-  }
-
-  const pacScript = buildPacScript(activeConfig);
-  await setProxyConfig({
-    mode: "pac_script",
-    pacScript: {
-      data: pacScript,
-      mandatory: false
+    if (!activeConfig.enabled) {
+      await setProxyConfig({ mode: "direct" });
+      updateBadge(false);
+      return;
     }
-  });
-  updateBadge(true);
+
+    const pacScript = buildPacScript(activeConfig);
+    await setProxyConfig({
+      mode: "pac_script",
+      pacScript: {
+        data: pacScript,
+        mandatory: false
+      }
+    });
+    updateBadge(true);
+  } catch (error) {
+    console.error("Failed to apply proxy config", error);
+    updateBadge(false, "!");
+  }
 }
 
 function setProxyConfig(value) {
@@ -80,9 +85,9 @@ function setProxyConfig(value) {
   });
 }
 
-function updateBadge(enabled) {
-  chrome.action.setBadgeText({ text: enabled ? "ON" : "" });
-  chrome.action.setBadgeBackgroundColor({ color: "#1f8f5f" });
+function updateBadge(enabled, text) {
+  chrome.action.setBadgeText({ text: text ?? (enabled ? "ON" : "") });
+  chrome.action.setBadgeBackgroundColor({ color: enabled ? "#1f8f5f" : "#b42318" });
 }
 
 function handleAuthRequired(details, callback) {

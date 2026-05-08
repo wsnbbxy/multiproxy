@@ -9,10 +9,26 @@ const ruleCount = document.querySelector("#rule-count");
 const status = document.querySelector("#status");
 
 enabled.addEventListener("change", async () => {
+  if (!config) {
+    enabled.checked = false;
+    status.textContent = "配置尚未加载完成。";
+    return;
+  }
+
+  const nextEnabled = enabled.checked;
+  enabled.disabled = true;
   config.enabled = enabled.checked;
-  await saveConfig(config);
-  render();
-  status.textContent = enabled.checked ? "代理已启用。" : "代理已关闭。";
+  try {
+    await saveConfig(config);
+    render();
+    status.textContent = nextEnabled ? "代理已启用。" : "代理已关闭。";
+  } catch (error) {
+    config.enabled = !nextEnabled;
+    render();
+    status.textContent = `保存失败：${error.message}`;
+  } finally {
+    enabled.disabled = false;
+  }
 });
 
 document.querySelector("#open-options").addEventListener("click", () => {
@@ -22,8 +38,13 @@ document.querySelector("#open-options").addEventListener("click", () => {
 init();
 
 async function init() {
-  config = await loadConfig();
-  render();
+  try {
+    config = await loadConfig();
+    render();
+    enabled.disabled = false;
+  } catch (error) {
+    status.textContent = `加载失败：${error.message}`;
+  }
 }
 
 function render() {
