@@ -4,6 +4,7 @@ import {
   loadConfig,
   normalizeConfig,
   normalizeDomainPattern,
+  normalizeProxy,
   saveConfig,
   validateConfig
 } from "./shared/config.js";
@@ -154,6 +155,9 @@ function renderProxies() {
     setValue(row, "port", proxy.port);
     setValue(row, "username", proxy.username);
     setValue(row, "password", proxy.password);
+    row.querySelector('[data-action="test-proxy"]').addEventListener("click", () => {
+      testProxyRow(proxy.id);
+    });
     row.querySelector('[data-action="delete-proxy"]').addEventListener("click", () => {
       state.config.proxies = state.config.proxies.filter((item) => item.id !== proxy.id);
       state.config.rules = state.config.rules.filter((rule) => rule.proxyId !== proxy.id);
@@ -232,4 +236,65 @@ function getValue(root, field) {
 
 function getChecked(root, field) {
   return root.querySelector(`[data-field="${field}"]`).checked;
+}
+
+async function testProxyRow(proxyId) {
+  syncFromDom();
+  const proxy = state.config.proxies.find((item) => item.id === proxyId);
+  const row = elements.proxyList.querySelector(`tr[data-id="${CSS.escape(proxyId)}"]`);
+  const result = row?.querySelector('[data-field="testResult"]');
+  const button = row?.querySelector('[data-action="test-proxy"]');
+
+  if (!proxy || !result || !button) {
+    return;
+  }
+
+  if (!normalizeProxy(proxy)) {
+    setProxyTestResult(result, "当前代理配置无效，请检查 Host 和端口。", "error");
+    return;
+  }
+
+  button.disabled = true;
+  setProxyTestButtonsDisabled(true);
+  setProxyTestResult(result, "正在通过此代理获取外部 IP...", "");
+
+  try {
+    const response = await sendMessage({ type: "test-proxy", proxy });
+    if (!response?.ok) {
+      throw new Error(response?.error || "测试失败");
+    }
+    setProxyTestResult(
+      result,
+      `代理出口 ${response.ip}，响应 ${response.durationMs} ms。`,
+      "success"
+    );
+  } catch (error) {
+    setProxyTestResult(result, `测试失败：${error.message}`, "error");
+  } finally {
+    setProxyTestButtonsDisabled(false);
+  }
+}
+
+function setProxyTestResult(element, message, type) {
+  element.textContent = message;
+  element.className = type || "";
+}
+
+function setProxyTestButtonsDisabled(disabled) {
+  elements.proxyList.querySelectorAll('[data-action="test-proxy"]').forEach((button) => {
+    button.disabled = disabled;
+  });
+}
+
+function sendMessage(message) {
+  return new Promise((resolve, reject) => {
+    chrome.runtime.sendMessage(message, (response) => {
+      const error = chrome.runtime.lastError;
+      if (error) {
+        reject(new Error(error.message));
+        return;
+      }
+      resolve(response);
+    });
+  });
 }

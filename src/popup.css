@@ -79,6 +79,22 @@ dd {
   font-weight: 750;
 }
 
+button,
+select {
+  font: inherit;
+}
+
+select {
+  width: 100%;
+  min-height: 38px;
+  margin-top: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text);
+  padding: 8px 10px;
+}
+
 button {
   width: 100%;
   min-height: 38px;
@@ -90,6 +106,27 @@ button {
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+}
+
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.add-current {
+  margin-top: 18px;
+}
+
+.add-current label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.add-current button {
+  margin-top: 10px;
 }
 
 #status {

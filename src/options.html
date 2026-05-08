@@ -34,6 +34,7 @@
                 <th>端口</th>
                 <th>用户名</th>
                 <th>密码</th>
+                <th>代理测试</th>
                 <th></th>
               </tr>
             </thead>
@@ -107,6 +108,10 @@
         <td><input data-field="port" type="number" min="1" max="65535" placeholder="7890"></td>
         <td><input data-field="username" type="text" autocomplete="username"></td>
         <td><input data-field="password" type="password" autocomplete="current-password"></td>
+        <td class="proxy-test-cell">
+          <button data-action="test-proxy" type="button">测试</button>
+          <p data-field="testResult">点击测试，通过此代理获取外部 IP。</p>
+        </td>
         <td><button data-action="delete-proxy" class="ghost" type="button">删除</button></td>
       </tr>
     </template>

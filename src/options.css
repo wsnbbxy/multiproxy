@@ -211,6 +211,28 @@ button:hover {
   min-height: 20px;
 }
 
+.proxy-test-cell {
+  min-width: 220px;
+}
+
+.proxy-test-cell button {
+  width: auto;
+}
+
+.proxy-test-cell p {
+  margin-top: 6px;
+  min-height: 18px;
+  font-size: 12px;
+}
+
+.proxy-test-cell p.error {
+  color: var(--danger);
+}
+
+.proxy-test-cell p.success {
+  color: var(--accent-dark);
+}
+
 .tool-actions {
   display: flex;
   gap: 10px;

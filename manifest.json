@@ -5,6 +5,7 @@
   "version": "1.0.0",
   "minimum_chrome_version": "108",
   "permissions": [
+    "activeTab",
     "proxy",
     "storage",
     "webRequest",

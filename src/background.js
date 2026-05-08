@@ -1,9 +1,12 @@
-import { loadConfig, STORAGE_KEY } from "./shared/config.js";
-import { buildPacScript } from "./shared/pac.js";
+import { loadConfig, normalizeProxy, STORAGE_KEY } from "./shared/config.js";
+import { buildPacScript, formatPacProxy } from "./shared/pac.js";
 
 const AUTH_RETRY_LIMIT = 2;
+const PROXY_TEST_URL = "https://api64.ipify.org?format=json";
+const PROXY_TEST_TIMEOUT_MS = 8000;
 const authAttempts = new Map();
 let activeConfig = null;
+let proxyTestInProgress = false;
 
 chrome.runtime.onInstalled.addListener(() => {
   applyStoredConfig();
@@ -15,12 +18,31 @@ chrome.runtime.onStartup.addListener(() => {
 
 chrome.storage.onChanged.addListener((changes, areaName) => {
   if (areaName === "local" && changes[STORAGE_KEY]) {
+    if (proxyTestInProgress) {
+      return;
+    }
     applyStoredConfig();
   }
 });
 
 chrome.proxy.onProxyError.addListener((details) => {
   console.warn("Proxy error", details);
+});
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type !== "test-proxy") {
+    return false;
+  }
+
+  testProxy(message.proxy)
+    .then((result) => {
+      sendResponse({ ok: true, ...result });
+    })
+    .catch((error) => {
+      sendResponse({ ok: false, error: error.message || "测试失败" });
+    });
+
+  return true;
 });
 
 chrome.webRequest.onAuthRequired.addListener(
@@ -88,6 +110,109 @@ function setProxyConfig(value) {
 function updateBadge(enabled, text) {
   chrome.action.setBadgeText({ text: text ?? (enabled ? "ON" : "") });
   chrome.action.setBadgeBackgroundColor({ color: enabled ? "#1f8f5f" : "#b42318" });
+}
+
+async function testProxy(proxyInput) {
+  if (proxyTestInProgress) {
+    throw new Error("已有测试正在进行，请稍后再试。");
+  }
+
+  const proxy = normalizeProxy(proxyInput);
+  if (!proxy) {
+    throw new Error("代理配置无效，请检查 Host 和端口。");
+  }
+
+  proxyTestInProgress = true;
+  const token = createTestToken();
+  const testUrl = `${PROXY_TEST_URL}&mpr_test=${encodeURIComponent(token)}`;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), PROXY_TEST_TIMEOUT_MS);
+  const startedAt = performance.now();
+
+  try {
+    await applyProxyTestConfig(proxy, token);
+
+    const response = await fetch(testUrl, {
+      cache: "no-store",
+      signal: controller.signal
+    });
+    const durationMs = Math.round(performance.now() - startedAt);
+
+    if (!response.ok) {
+      throw new Error(`请求失败：HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    if (!data || typeof data.ip !== "string" || !data.ip) {
+      throw new Error("响应中没有 IP 地址");
+    }
+
+    return {
+      ip: data.ip,
+      durationMs
+    };
+  } catch (error) {
+    if (error.name === "AbortError") {
+      throw new Error("请求超时");
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+    await applyStoredConfig();
+    proxyTestInProgress = false;
+  }
+}
+
+async function applyProxyTestConfig(proxy, token) {
+  const storedConfig = await loadConfig();
+  const storedPacScript = storedConfig.enabled ? buildPacScript(storedConfig) : "";
+  activeConfig = {
+    ...storedConfig,
+    enabled: true,
+    proxies: upsertProxy(storedConfig.proxies, proxy)
+  };
+
+  await setProxyConfig({
+    mode: "pac_script",
+    pacScript: {
+      data: buildProxyTestPacScript(proxy, token, storedConfig.enabled, storedPacScript),
+      mandatory: false
+    }
+  });
+  updateBadge(true, "T");
+}
+
+function buildProxyTestPacScript(proxy, token, shouldUseStoredPac, storedPacScript) {
+  const proxyValue = formatPacProxy(proxy);
+  const tokenValue = `mpr_test=${escapePacString(token)}`;
+  const fallbackScript = shouldUseStoredPac ? renameStoredFindProxyForURL(storedPacScript) : "";
+  const fallbackCall = shouldUseStoredPac ? "  return StoredFindProxyForURL(url, host);" : '  return "DIRECT";';
+
+  return `${fallbackScript}\n\nfunction FindProxyForURL(url, host) {\n  if (String(url || "").indexOf("${tokenValue}") !== -1) {\n    return "${escapePacString(proxyValue)}";\n  }\n\n${fallbackCall}\n}\n`;
+}
+
+function upsertProxy(proxies, proxy) {
+  const withoutProxy = proxies.filter((item) => {
+    const sameId = item.id === proxy.id;
+    const sameEndpoint = item.host === proxy.host && Number(item.port) === Number(proxy.port);
+    return !sameId && !sameEndpoint;
+  });
+  return [proxy, ...withoutProxy];
+}
+
+function createTestToken() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+    return globalThis.crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function renameStoredFindProxyForURL(script) {
+  return script.replace("function FindProxyForURL", "function StoredFindProxyForURL");
+}
+
+function escapePacString(value) {
+  return String(value).replace(/\\/g, "\\\\").replace(/"/g, '\\"');
 }
 
 function handleAuthRequired(details, callback) {
