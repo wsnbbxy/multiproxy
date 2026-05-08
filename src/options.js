@@ -28,6 +28,7 @@ const elements = {
 };
 
 document.querySelector("#add-proxy").addEventListener("click", () => {
+  syncFromDom();
   state.config.proxies.push({
     id: createId("proxy"),
     name: "",
@@ -41,6 +42,7 @@ document.querySelector("#add-proxy").addEventListener("click", () => {
 });
 
 document.querySelector("#add-rule").addEventListener("click", () => {
+  syncFromDom();
   state.config.rules.push({
     id: createId("rule"),
     pattern: "",
