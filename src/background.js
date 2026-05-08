@@ -2,11 +2,13 @@ import { loadConfig, normalizeProxy, STORAGE_KEY } from "./shared/config.js";
 import { buildPacScript, formatPacProxy } from "./shared/pac.js";
 
 const AUTH_RETRY_LIMIT = 2;
+const PROXY_TEST_HOST = "api64.ipify.org";
 const PROXY_TEST_URL = "https://api64.ipify.org?format=json";
 const PROXY_TEST_TIMEOUT_MS = 8000;
 const authAttempts = new Map();
 let activeConfig = null;
 let proxyTestInProgress = false;
+let lastProxyError = null;
 
 chrome.runtime.onInstalled.addListener(() => {
   applyStoredConfig();
@@ -26,6 +28,7 @@ chrome.storage.onChanged.addListener((changes, areaName) => {
 });
 
 chrome.proxy.onProxyError.addListener((details) => {
+  lastProxyError = details;
   console.warn("Proxy error", details);
 });
 
@@ -39,7 +42,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ ok: true, ...result });
     })
     .catch((error) => {
-      sendResponse({ ok: false, error: error.message || "测试失败" });
+      sendResponse({
+        ok: false,
+        error: error.message || "测试失败",
+        proxyValue: error.proxyValue,
+        proxyError: error.proxyError,
+        targetHost: PROXY_TEST_HOST
+      });
     });
 
   return true;
@@ -123,14 +132,15 @@ async function testProxy(proxyInput) {
   }
 
   proxyTestInProgress = true;
-  const token = createTestToken();
-  const testUrl = `${PROXY_TEST_URL}&mpr_test=${encodeURIComponent(token)}`;
+  const proxyValue = formatPacProxy(proxy);
+  const testUrl = `${PROXY_TEST_URL}&mpr_cache=${encodeURIComponent(createTestToken())}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), PROXY_TEST_TIMEOUT_MS);
   const startedAt = performance.now();
 
   try {
-    await applyProxyTestConfig(proxy, token);
+    lastProxyError = null;
+    await applyProxyTestConfig(proxy);
 
     const response = await fetch(testUrl, {
       cache: "no-store",
@@ -152,18 +162,21 @@ async function testProxy(proxyInput) {
       durationMs
     };
   } catch (error) {
-    if (error.name === "AbortError") {
-      throw new Error("请求超时");
-    }
-    throw error;
+    const testError = error.name === "AbortError" ? new Error("请求超时") : error;
+    testError.proxyValue = proxyValue;
+    testError.proxyError = lastProxyError ? formatProxyError(lastProxyError) : "";
+    throw testError;
   } finally {
     clearTimeout(timeoutId);
-    await applyStoredConfig();
-    proxyTestInProgress = false;
+    try {
+      await applyStoredConfig();
+    } finally {
+      proxyTestInProgress = false;
+    }
   }
 }
 
-async function applyProxyTestConfig(proxy, token) {
+async function applyProxyTestConfig(proxy) {
   const storedConfig = await loadConfig();
   const storedPacScript = storedConfig.enabled ? buildPacScript(storedConfig) : "";
   activeConfig = {
@@ -175,20 +188,20 @@ async function applyProxyTestConfig(proxy, token) {
   await setProxyConfig({
     mode: "pac_script",
     pacScript: {
-      data: buildProxyTestPacScript(proxy, token, storedConfig.enabled, storedPacScript),
+      data: buildProxyTestPacScript(proxy, storedConfig.enabled, storedPacScript),
       mandatory: false
     }
   });
   updateBadge(true, "T");
 }
 
-function buildProxyTestPacScript(proxy, token, shouldUseStoredPac, storedPacScript) {
+function buildProxyTestPacScript(proxy, shouldUseStoredPac, storedPacScript) {
   const proxyValue = formatPacProxy(proxy);
-  const tokenValue = `mpr_test=${escapePacString(token)}`;
+  const testHost = escapePacString(PROXY_TEST_HOST);
   const fallbackScript = shouldUseStoredPac ? renameStoredFindProxyForURL(storedPacScript) : "";
   const fallbackCall = shouldUseStoredPac ? "  return StoredFindProxyForURL(url, host);" : '  return "DIRECT";';
 
-  return `${fallbackScript}\n\nfunction FindProxyForURL(url, host) {\n  if (String(url || "").indexOf("${tokenValue}") !== -1) {\n    return "${escapePacString(proxyValue)}";\n  }\n\n${fallbackCall}\n}\n`;
+  return `${fallbackScript}\n\nfunction FindProxyForURL(url, host) {\n  if (String(host || "").toLowerCase() === "${testHost}") {\n    return "${escapePacString(proxyValue)}";\n  }\n\n${fallbackCall}\n}\n`;
 }
 
 function upsertProxy(proxies, proxy) {
@@ -209,6 +222,10 @@ function createTestToken() {
 
 function renameStoredFindProxyForURL(script) {
   return script.replace("function FindProxyForURL", "function StoredFindProxyForURL");
+}
+
+function formatProxyError(details) {
+  return [details.error, details.details].filter(Boolean).join("：");
 }
 
 function escapePacString(value) {

@@ -294,7 +294,22 @@ function sendMessage(message) {
         reject(new Error(error.message));
         return;
       }
+      if (response && response.ok === false) {
+        reject(new Error(formatProxyTestError(response)));
+        return;
+      }
       resolve(response);
     });
   });
+}
+
+function formatProxyTestError(response) {
+  const parts = [response.error || "测试失败"];
+  if (response.proxyError) {
+    parts.push(response.proxyError);
+  }
+  if (response.proxyValue) {
+    parts.push(response.proxyValue);
+  }
+  return parts.join("；");
 }
