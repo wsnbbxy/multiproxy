@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Multi Proxy Router",
+  "description": "Route different websites through different proxies with PAC rules.",
+  "version": "1.0.0",
+  "minimum_chrome_version": "108",
+  "permissions": [
+    "proxy",
+    "storage",
+    "webRequest",
+    "webRequestAuthProvider"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "src/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Multi Proxy Router",
+    "default_popup": "src/popup.html"
+  },
+  "options_page": "src/options.html"
+}

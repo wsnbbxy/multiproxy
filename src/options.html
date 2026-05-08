@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Multi Proxy Router Options</title>
+    <link rel="stylesheet" href="options.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <h1>Multi Proxy Router</h1>
+          <p id="summary">加载中...</p>
+        </div>
+        <label class="switch">
+          <input id="enabled" type="checkbox">
+          <span>启用代理</span>
+        </label>
+      </header>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>代理服务器</h2>
+          <button id="add-proxy" type="button">新增代理</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>协议</th>
+                <th>Host</th>
+                <th>端口</th>
+                <th>用户名</th>
+                <th>密码</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="proxy-list"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="section-title">
+          <h2>域名规则</h2>
+          <button id="add-rule" type="button">新增规则</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>启用</th>
+                <th>域名通配</th>
+                <th>使用代理</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="rule-list"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="panel tester">
+        <div>
+          <h2>规则测试</h2>
+          <p>输入域名，检查当前表单配置会命中哪条规则。</p>
+        </div>
+        <div class="test-controls">
+          <input id="test-host" type="text" placeholder="github.com">
+          <button id="test-rule" type="button">测试</button>
+        </div>
+        <p id="test-result"></p>
+      </section>
+
+      <section class="panel tools">
+        <div>
+          <h2>导入导出</h2>
+          <p>配置以 JSON 保存，可用于备份或迁移。</p>
+        </div>
+        <div class="tool-actions">
+          <button id="export-config" type="button">导出 JSON</button>
+          <button id="import-config" type="button">导入 JSON</button>
+        </div>
+        <textarea id="config-json" spellcheck="false" placeholder="导出的配置会显示在这里，也可以粘贴 JSON 后导入"></textarea>
+      </section>
+
+      <footer class="footer">
+        <p id="status" role="status"></p>
+        <button id="save" class="primary" type="button">保存并应用</button>
+      </footer>
+    </main>
+
+    <template id="proxy-row-template">
+      <tr>
+        <td><input data-field="name" type="text" placeholder="香港节点"></td>
+        <td>
+          <select data-field="scheme">
+            <option value="http">HTTP</option>
+            <option value="https">HTTPS</option>
+            <option value="socks4">SOCKS4</option>
+            <option value="socks5">SOCKS5</option>
+          </select>
+        </td>
+        <td><input data-field="host" type="text" placeholder="127.0.0.1"></td>
+        <td><input data-field="port" type="number" min="1" max="65535" placeholder="7890"></td>
+        <td><input data-field="username" type="text" autocomplete="username"></td>
+        <td><input data-field="password" type="password" autocomplete="current-password"></td>
+        <td><button data-action="delete-proxy" class="ghost" type="button">删除</button></td>
+      </tr>
+    </template>
+
+    <template id="rule-row-template">
+      <tr>
+        <td><input data-field="enabled" type="checkbox"></td>
+        <td><input data-field="pattern" type="text" placeholder="*.google.com"></td>
+        <td><select data-field="proxyId"></select></td>
+        <td><button data-action="delete-rule" class="ghost" type="button">删除</button></td>
+      </tr>
+    </template>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

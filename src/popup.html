@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Multi Proxy Router</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Multi Proxy Router</h1>
+        <p id="state">加载中...</p>
+      </header>
+
+      <label class="switch">
+        <input id="enabled" type="checkbox">
+        <span>启用代理</span>
+      </label>
+
+      <dl>
+        <div>
+          <dt>代理</dt>
+          <dd id="proxy-count">0</dd>
+        </div>
+        <div>
+          <dt>规则</dt>
+          <dd id="rule-count">0</dd>
+        </div>
+      </dl>
+
+      <button id="open-options" type="button">打开选项页</button>
+      <p id="status" role="status"></p>
+    </main>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
