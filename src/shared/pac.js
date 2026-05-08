@@ -7,20 +7,21 @@ const PAC_SCHEME = {
 
 export function buildPacScript(config) {
   const proxiesById = new Map(config.proxies.map((proxy) => [proxy.id, proxy]));
-  const rules = config.rules
-    .filter((rule) => rule.enabled && proxiesById.has(rule.proxyId))
-    .map((rule) => {
-      const proxy = proxiesById.get(rule.proxyId);
-      return {
-        pattern: rule.pattern,
-        proxy: formatPacProxy(proxy),
-        exact: !rule.pattern.startsWith("*."),
-        score: getRuleScore(rule.pattern)
-      };
-    })
-    .sort((left, right) => right.score - left.score);
+  const exactRules = {};
+  const wildcardRules = {};
 
-  return `var RULES = ${JSON.stringify(rules)};\n\nfunction FindProxyForURL(url, host) {\n  var normalizedHost = String(host || "").toLowerCase();\n\n  for (var i = 0; i < RULES.length; i += 1) {\n    var rule = RULES[i];\n    if (matchesRule(normalizedHost, rule.pattern, rule.exact)) {\n      return rule.proxy;\n    }\n  }\n\n  return "DIRECT";\n}\n\nfunction matchesRule(host, pattern, exact) {\n  if (exact) {\n    return host === pattern || dnsDomainIs(host, "." + pattern);\n  }\n\n  var suffix = pattern.slice(2);\n  return host === suffix || dnsDomainIs(host, "." + suffix);\n}\n`;
+  config.rules
+    .filter((rule) => rule.enabled && proxiesById.has(rule.proxyId))
+    .forEach((rule) => {
+      const proxy = formatPacProxy(proxiesById.get(rule.proxyId));
+      if (rule.pattern.startsWith("*.")) {
+        wildcardRules[rule.pattern.slice(2)] = proxy;
+        return;
+      }
+      exactRules[rule.pattern] = proxy;
+    });
+
+  return `var EXACT_RULES = ${JSON.stringify(exactRules)};\nvar WILDCARD_RULES = ${JSON.stringify(wildcardRules)};\n\nfunction FindProxyForURL(url, host) {\n  var normalizedHost = String(host || "").toLowerCase();\n  var labels = normalizedHost.split(".");\n\n  for (var i = 0; i < labels.length; i += 1) {\n    var exactSuffix = labels.slice(i).join(".");\n    if (Object.prototype.hasOwnProperty.call(EXACT_RULES, exactSuffix)) {\n      return EXACT_RULES[exactSuffix];\n    }\n  }\n\n  for (var j = 0; j < labels.length; j += 1) {\n    var wildcardSuffix = labels.slice(j).join(".");\n    if (Object.prototype.hasOwnProperty.call(WILDCARD_RULES, wildcardSuffix)) {\n      return WILDCARD_RULES[wildcardSuffix];\n    }\n  }\n\n  return "DIRECT";\n}\n`;
 }
 
 export function formatPacProxy(proxy) {

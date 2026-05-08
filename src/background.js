@@ -7,6 +7,7 @@ const PROXY_TEST_URL = "https://api64.ipify.org?format=json";
 const PROXY_TEST_TIMEOUT_MS = 8000;
 const authAttempts = new Map();
 let activeConfig = null;
+let appliedProxyFingerprint = "";
 let proxyTestInProgress = false;
 let lastProxyError = null;
 
@@ -81,22 +82,15 @@ applyStoredConfig();
 async function applyStoredConfig() {
   try {
     activeConfig = await loadConfig();
+    const proxyConfig = buildProxyConfig(activeConfig);
+    const fingerprint = getProxyConfigFingerprint(proxyConfig);
 
-    if (!activeConfig.enabled) {
-      await setProxyConfig({ mode: "direct" });
-      updateBadge(false);
-      return;
+    if (fingerprint !== appliedProxyFingerprint) {
+      await setProxyConfig(proxyConfig);
+      appliedProxyFingerprint = fingerprint;
     }
 
-    const pacScript = buildPacScript(activeConfig);
-    await setProxyConfig({
-      mode: "pac_script",
-      pacScript: {
-        data: pacScript,
-        mandatory: false
-      }
-    });
-    updateBadge(true);
+    updateBadge(activeConfig.enabled);
   } catch (error) {
     console.error("Failed to apply proxy config", error);
     updateBadge(false, "!");
@@ -114,6 +108,24 @@ function setProxyConfig(value) {
       resolve();
     });
   });
+}
+
+function buildProxyConfig(config) {
+  if (!config.enabled) {
+    return { mode: "direct" };
+  }
+
+  return {
+    mode: "pac_script",
+    pacScript: {
+      data: buildPacScript(config),
+      mandatory: false
+    }
+  };
+}
+
+function getProxyConfigFingerprint(value) {
+  return JSON.stringify(value);
 }
 
 function updateBadge(enabled, text) {
@@ -192,6 +204,7 @@ async function applyProxyTestConfig(proxy) {
       mandatory: false
     }
   });
+  appliedProxyFingerprint = "";
   updateBadge(true, "T");
 }
 
