@@ -9,6 +9,8 @@ const ruleCount = document.querySelector("#rule-count");
 const status = document.querySelector("#status");
 const proxySelect = document.querySelector("#proxy-select");
 const addCurrent = document.querySelector("#add-current");
+const globalProxyEnabled = document.querySelector("#global-proxy-enabled");
+const globalProxyState = document.querySelector("#global-proxy-state");
 
 enabled.addEventListener("change", async () => {
   if (!config) {
@@ -30,6 +32,36 @@ enabled.addEventListener("change", async () => {
     status.textContent = `保存失败：${error.message}`;
   } finally {
     enabled.disabled = false;
+  }
+});
+
+globalProxyEnabled.addEventListener("change", async () => {
+  if (!config) {
+    globalProxyEnabled.checked = false;
+    status.textContent = "配置尚未加载完成。";
+    return;
+  }
+
+  const proxy = getGlobalProxy();
+  if (!proxy) {
+    globalProxyEnabled.checked = false;
+    status.textContent = "请先在选项页选择全局代理。";
+    return;
+  }
+
+  const nextEnabled = globalProxyEnabled.checked;
+  globalProxyEnabled.disabled = true;
+  config.globalProxyEnabled = nextEnabled;
+  try {
+    config = await saveConfig(config);
+    render();
+    status.textContent = nextEnabled ? "全局代理已启用。" : "全局代理已关闭。";
+  } catch (error) {
+    config.globalProxyEnabled = !nextEnabled;
+    render();
+    status.textContent = `保存失败：${error.message}`;
+  } finally {
+    globalProxyEnabled.disabled = !getGlobalProxy();
   }
 });
 
@@ -90,9 +122,15 @@ async function init() {
 
 function render() {
   enabled.checked = config.enabled;
-  state.textContent = config.enabled ? "当前按域名规则分流" : "当前所有流量直连";
+  const globalProxy = getGlobalProxy();
+  state.textContent = getStateText(globalProxy);
   proxyCount.textContent = String(config.proxies.length);
   ruleCount.textContent = String(config.rules.length);
+  globalProxyEnabled.checked = Boolean(config.globalProxyEnabled && globalProxy);
+  globalProxyEnabled.disabled = !globalProxy;
+  globalProxyState.textContent = globalProxy
+    ? `全局代理：${globalProxy.name}`
+    : "全局代理未配置";
   renderProxyOptions();
 }
 
@@ -163,4 +201,18 @@ function queryActiveTabs() {
 
 function isIpAddress(hostname) {
   return /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) || hostname.includes(":");
+}
+
+function getGlobalProxy() {
+  return config.proxies.find((proxy) => proxy.id === config.globalProxyId);
+}
+
+function getStateText(globalProxy) {
+  if (!config.enabled) {
+    return "当前所有流量直连";
+  }
+  if (config.globalProxyEnabled && globalProxy) {
+    return "当前按规则分流，未命中走全局代理";
+  }
+  return "当前按域名规则分流";
 }

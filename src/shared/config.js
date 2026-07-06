@@ -2,6 +2,8 @@ export const STORAGE_KEY = "multiProxyRouterConfig";
 
 export const DEFAULT_CONFIG = Object.freeze({
   enabled: false,
+  globalProxyEnabled: false,
+  globalProxyId: "",
   proxies: [],
   rules: []
 });
@@ -27,9 +29,13 @@ export function normalizeConfig(input) {
         .map((rule) => normalizeRule(rule))
         .filter((rule) => rule && knownProxyIds.has(rule.proxyId))
     : [];
+  const globalProxyId = cleanText(source.globalProxyId);
+  const hasGlobalProxy = knownProxyIds.has(globalProxyId);
 
   return {
     enabled: Boolean(source.enabled),
+    globalProxyEnabled: Boolean(source.globalProxyEnabled) && hasGlobalProxy,
+    globalProxyId: hasGlobalProxy ? globalProxyId : "",
     proxies,
     rules
   };
@@ -117,6 +123,7 @@ export function validateConfig(config) {
     return normalized;
   });
   const knownProxyIds = new Set(proxies.filter(Boolean).map((proxy) => proxy.id));
+  const rawGlobalProxyId = cleanText(source.globalProxyId);
   const rules = rawRules.map((rule, index) => {
     const normalized = normalizeRule(rule);
     if (!normalized) {
@@ -130,6 +137,8 @@ export function validateConfig(config) {
   });
   const normalized = {
     enabled: Boolean(source.enabled),
+    globalProxyEnabled: Boolean(source.globalProxyEnabled) && knownProxyIds.has(rawGlobalProxyId),
+    globalProxyId: knownProxyIds.has(rawGlobalProxyId) ? rawGlobalProxyId : "",
     proxies: proxies.filter(Boolean),
     rules: rules.filter(Boolean)
   };
@@ -142,6 +151,10 @@ export function validateConfig(config) {
     }
     proxyIds.add(proxy.id);
   });
+
+  if (source.globalProxyEnabled && !knownProxyIds.has(rawGlobalProxyId)) {
+    errors.push("全局代理指向不存在的代理");
+  }
 
   normalized.rules.forEach((rule) => {
     const key = rule.pattern.toLowerCase();

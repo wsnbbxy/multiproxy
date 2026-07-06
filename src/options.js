@@ -16,6 +16,8 @@ const state = {
 
 const elements = {
   enabled: document.querySelector("#enabled"),
+  globalProxyEnabled: document.querySelector("#global-proxy-enabled"),
+  globalProxyId: document.querySelector("#global-proxy-id"),
   summary: document.querySelector("#summary"),
   proxyList: document.querySelector("#proxy-list"),
   ruleList: document.querySelector("#rule-list"),
@@ -119,12 +121,27 @@ document.querySelector("#test-rule").addEventListener("click", () => {
     return;
   }
 
+  if (match.global) {
+    elements.testResult.textContent = `${host} 未命中规则，使用全局代理 ${match.proxy.name} (${match.pacValue})。`;
+    return;
+  }
+
   elements.testResult.textContent = `${host} 命中 ${match.rule.pattern}，使用 ${match.proxy.name} (${match.pacValue})。`;
 });
 
 elements.enabled.addEventListener("change", () => {
   state.config.enabled = elements.enabled.checked;
   updateSummary();
+});
+
+elements.globalProxyEnabled.addEventListener("change", () => {
+  state.config.globalProxyEnabled = elements.globalProxyEnabled.checked;
+  state.config.globalProxyId = elements.globalProxyId.value;
+  updateSummary();
+});
+
+elements.globalProxyId.addEventListener("change", () => {
+  state.config.globalProxyId = elements.globalProxyId.value;
 });
 
 init();
@@ -142,6 +159,7 @@ function render() {
   elements.enabled.checked = state.config.enabled;
   renderProxies();
   renderRules();
+  renderGlobalProxy();
   updateSummary();
 }
 
@@ -163,6 +181,10 @@ function renderProxies() {
     row.querySelector('[data-action="delete-proxy"]').addEventListener("click", () => {
       state.config.proxies = state.config.proxies.filter((item) => item.id !== proxy.id);
       state.config.rules = state.config.rules.filter((rule) => rule.proxyId !== proxy.id);
+      if (state.config.globalProxyId === proxy.id) {
+        state.config.globalProxyEnabled = false;
+        state.config.globalProxyId = "";
+      }
       render();
     });
     elements.proxyList.append(row);
@@ -195,8 +217,33 @@ function renderRules() {
   });
 }
 
+function renderGlobalProxy() {
+  const selectedProxyExists = state.config.proxies.some((proxy) => {
+    return proxy.id === state.config.globalProxyId;
+  });
+  elements.globalProxyId.textContent = "";
+
+  state.config.proxies.forEach((proxy) => {
+    const option = document.createElement("option");
+    option.value = proxy.id;
+    option.textContent = proxy.name || `${proxy.scheme}://${proxy.host}:${proxy.port}`;
+    elements.globalProxyId.append(option);
+  });
+
+  elements.globalProxyId.value = selectedProxyExists
+    ? state.config.globalProxyId
+    : state.config.proxies[0]?.id || "";
+  elements.globalProxyEnabled.checked =
+    state.config.globalProxyEnabled && Boolean(elements.globalProxyId.value);
+  elements.globalProxyEnabled.disabled = state.config.proxies.length === 0;
+  elements.globalProxyId.disabled = state.config.proxies.length === 0;
+}
+
 function syncFromDom() {
   state.config.enabled = elements.enabled.checked;
+  state.config.globalProxyEnabled =
+    elements.globalProxyEnabled.checked && Boolean(elements.globalProxyId.value);
+  state.config.globalProxyId = elements.globalProxyId.value;
   state.config.proxies = Array.from(elements.proxyList.querySelectorAll("tr")).map((row) => ({
     id: row.dataset.id,
     name: getValue(row, "name"),
@@ -216,7 +263,8 @@ function syncFromDom() {
 
 function updateSummary() {
   const enabledText = state.config.enabled ? "已启用" : "未启用";
-  elements.summary.textContent = `${enabledText}，${state.config.proxies.length} 个代理，${state.config.rules.length} 条规则。`;
+  const globalText = state.config.globalProxyEnabled ? "全局代理已启用" : "全局代理未启用";
+  elements.summary.textContent = `${enabledText}，${state.config.proxies.length} 个代理，${state.config.rules.length} 条规则，${globalText}。`;
 }
 
 function showStatus(message, type) {

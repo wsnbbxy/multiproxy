@@ -189,11 +189,25 @@ button:hover {
 }
 
 .tools,
+.global-proxy,
 .tester {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 16px;
   padding: 20px;
+}
+
+.global-proxy {
+  grid-template-columns: 1fr auto minmax(220px, 320px);
+  align-items: center;
+}
+
+.global-proxy-select span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .tools textarea {
@@ -277,12 +291,14 @@ button:hover {
 
   .topbar,
   .tools,
+  .global-proxy,
   .tester,
   .footer {
     display: block;
   }
 
   .switch,
+  .global-proxy-select,
   .test-controls,
   .tool-actions,
   .footer button {
