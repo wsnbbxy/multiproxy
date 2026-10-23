@@ -323,3 +323,12 @@ button:hover {
     width: calc(100vw - 24px);
   }
 }
+
+#rule-list textarea {
+  min-width: 240px;
+  min-height: 80px;
+}
+
+#rule-list input[data-field="comment"] {
+  min-width: 180px;
+}

@@ -18,11 +18,10 @@ export function buildPacScript(config) {
     .filter((rule) => rule.enabled && proxiesById.has(rule.proxyId))
     .forEach((rule) => {
       const proxy = formatPacProxy(proxiesById.get(rule.proxyId));
-      if (rule.pattern.startsWith("*.")) {
-        wildcardRules[rule.pattern.slice(2)] = proxy;
-        return;
-      }
-      exactRules[rule.pattern] = proxy;
+      rule.patterns.forEach((pattern) => {
+        if (pattern.startsWith("*.")) wildcardRules[pattern.slice(2)] = proxy;
+        else exactRules[pattern] = proxy;
+      });
     });
 
   return `var EXACT_RULES = ${JSON.stringify(exactRules)};\nvar WILDCARD_RULES = ${JSON.stringify(wildcardRules)};\nvar GLOBAL_PROXY = ${JSON.stringify(globalProxy)};\n\nfunction FindProxyForURL(url, host) {\n  var normalizedHost = String(host || "").toLowerCase();\n  var labels = normalizedHost.split(".");\n\n  for (var i = 0; i < labels.length; i += 1) {\n    var exactSuffix = labels.slice(i).join(".");\n    if (Object.prototype.hasOwnProperty.call(EXACT_RULES, exactSuffix)) {\n      return EXACT_RULES[exactSuffix];\n    }\n  }\n\n  for (var j = 0; j < labels.length; j += 1) {\n    var wildcardSuffix = labels.slice(j).join(".");\n    if (Object.prototype.hasOwnProperty.call(WILDCARD_RULES, wildcardSuffix)) {\n      return WILDCARD_RULES[wildcardSuffix];\n    }\n  }\n\n  return GLOBAL_PROXY;\n}\n`;
@@ -43,13 +42,15 @@ export function findProxyForHost(config, host) {
   const proxiesById = new Map(config.proxies.map((proxy) => [proxy.id, proxy]));
   const rules = config.rules
     .filter((rule) => rule.enabled && proxiesById.has(rule.proxyId))
+    .flatMap((rule) => rule.patterns.map((pattern) => ({ rule, pattern })))
     .sort((left, right) => getRuleScore(right.pattern) - getRuleScore(left.pattern));
 
-  for (const rule of rules) {
-    const exact = !rule.pattern.startsWith("*.");
-    if (matchesHost(normalizedHost, rule.pattern, exact)) {
+  for (const { rule, pattern } of rules) {
+    const exact = !pattern.startsWith("*.");
+    if (matchesHost(normalizedHost, pattern, exact)) {
       return {
         rule,
+        matchedPattern: pattern,
         proxy: proxiesById.get(rule.proxyId),
         pacValue: formatPacProxy(proxiesById.get(rule.proxyId))
       };
