@@ -9,6 +9,10 @@ export function buildPacScript(config) {
   const proxiesById = new Map(config.proxies.map((proxy) => [proxy.id, proxy]));
   const exactRules = {};
   const wildcardRules = {};
+  const globalProxy =
+    config.globalProxyEnabled && proxiesById.has(config.globalProxyId)
+      ? formatPacProxy(proxiesById.get(config.globalProxyId))
+      : "DIRECT";
 
   config.rules
     .filter((rule) => rule.enabled && proxiesById.has(rule.proxyId))
@@ -21,7 +25,7 @@ export function buildPacScript(config) {
       exactRules[rule.pattern] = proxy;
     });
 
-  return `var EXACT_RULES = ${JSON.stringify(exactRules)};\nvar WILDCARD_RULES = ${JSON.stringify(wildcardRules)};\n\nfunction FindProxyForURL(url, host) {\n  var normalizedHost = String(host || "").toLowerCase();\n  var labels = normalizedHost.split(".");\n\n  for (var i = 0; i < labels.length; i += 1) {\n    var exactSuffix = labels.slice(i).join(".");\n    if (Object.prototype.hasOwnProperty.call(EXACT_RULES, exactSuffix)) {\n      return EXACT_RULES[exactSuffix];\n    }\n  }\n\n  for (var j = 0; j < labels.length; j += 1) {\n    var wildcardSuffix = labels.slice(j).join(".");\n    if (Object.prototype.hasOwnProperty.call(WILDCARD_RULES, wildcardSuffix)) {\n      return WILDCARD_RULES[wildcardSuffix];\n    }\n  }\n\n  return "DIRECT";\n}\n`;
+  return `var EXACT_RULES = ${JSON.stringify(exactRules)};\nvar WILDCARD_RULES = ${JSON.stringify(wildcardRules)};\nvar GLOBAL_PROXY = ${JSON.stringify(globalProxy)};\n\nfunction FindProxyForURL(url, host) {\n  var normalizedHost = String(host || "").toLowerCase();\n  var labels = normalizedHost.split(".");\n\n  for (var i = 0; i < labels.length; i += 1) {\n    var exactSuffix = labels.slice(i).join(".");\n    if (Object.prototype.hasOwnProperty.call(EXACT_RULES, exactSuffix)) {\n      return EXACT_RULES[exactSuffix];\n    }\n  }\n\n  for (var j = 0; j < labels.length; j += 1) {\n    var wildcardSuffix = labels.slice(j).join(".");\n    if (Object.prototype.hasOwnProperty.call(WILDCARD_RULES, wildcardSuffix)) {\n      return WILDCARD_RULES[wildcardSuffix];\n    }\n  }\n\n  return GLOBAL_PROXY;\n}\n`;
 }
 
 export function formatPacProxy(proxy) {
@@ -50,6 +54,16 @@ export function findProxyForHost(config, host) {
         pacValue: formatPacProxy(proxiesById.get(rule.proxyId))
       };
     }
+  }
+
+  if (config.globalProxyEnabled && proxiesById.has(config.globalProxyId)) {
+    const proxy = proxiesById.get(config.globalProxyId);
+    return {
+      rule: null,
+      proxy,
+      pacValue: formatPacProxy(proxy),
+      global: true
+    };
   }
 
   return null;

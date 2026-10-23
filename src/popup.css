@@ -42,6 +42,11 @@ dt {
   margin-top: 6px;
 }
 
+#global-proxy-state {
+  margin-top: 8px;
+  font-size: 13px;
+}
+
 .switch {
   display: flex;
   align-items: center;
