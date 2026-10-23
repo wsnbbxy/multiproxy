@@ -3,7 +3,7 @@ import {
   DEFAULT_CONFIG,
   loadConfig,
   normalizeConfig,
-  normalizeDomainPattern,
+  splitDomainPatterns,
   normalizeProxy,
   saveConfig,
   validateConfig
@@ -47,7 +47,8 @@ document.querySelector("#add-rule").addEventListener("click", () => {
   syncFromDom();
   state.config.rules.push({
     id: createId("rule"),
-    pattern: "",
+    patterns: [],
+    comment: "",
     proxyId: state.config.proxies[0]?.id || "",
     enabled: true
   });
@@ -126,7 +127,7 @@ document.querySelector("#test-rule").addEventListener("click", () => {
     return;
   }
 
-  elements.testResult.textContent = `${host} 命中 ${match.rule.pattern}，使用 ${match.proxy.name} (${match.pacValue})。`;
+  elements.testResult.textContent = `${host} 命中 ${match.matchedPattern}${match.rule.comment ? `（${match.rule.comment}）` : ""}，使用 ${match.proxy.name} (${match.pacValue})。`;
 });
 
 elements.enabled.addEventListener("change", () => {
@@ -179,6 +180,7 @@ function renderProxies() {
       testProxyRow(proxy.id);
     });
     row.querySelector('[data-action="delete-proxy"]').addEventListener("click", () => {
+      syncFromDom();
       state.config.proxies = state.config.proxies.filter((item) => item.id !== proxy.id);
       state.config.rules = state.config.rules.filter((rule) => rule.proxyId !== proxy.id);
       if (state.config.globalProxyId === proxy.id) {
@@ -198,7 +200,8 @@ function renderRules() {
     const row = elements.ruleTemplate.content.firstElementChild.cloneNode(true);
     row.dataset.id = rule.id;
     setChecked(row, "enabled", rule.enabled);
-    setValue(row, "pattern", rule.pattern);
+    setValue(row, "patterns", rule.patterns.join("\n"));
+    setValue(row, "comment", rule.comment);
 
     const proxySelect = row.querySelector('[data-field="proxyId"]');
     state.config.proxies.forEach((proxy) => {
@@ -210,6 +213,7 @@ function renderRules() {
     proxySelect.value = rule.proxyId;
 
     row.querySelector('[data-action="delete-rule"]').addEventListener("click", () => {
+      syncFromDom();
       state.config.rules = state.config.rules.filter((item) => item.id !== rule.id);
       render();
     });
@@ -256,7 +260,8 @@ function syncFromDom() {
   state.config.rules = Array.from(elements.ruleList.querySelectorAll("tr")).map((row) => ({
     id: row.dataset.id,
     enabled: getChecked(row, "enabled"),
-    pattern: normalizeDomainPattern(getValue(row, "pattern")),
+    patterns: splitDomainPatterns(getValue(row, "patterns")),
+    comment: row.querySelector('[data-field="comment"]').value,
     proxyId: getValue(row, "proxyId")
   }));
 }

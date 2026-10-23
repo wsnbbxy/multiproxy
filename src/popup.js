@@ -1,4 +1,4 @@
-import { createId, loadConfig, normalizeDomainPattern, saveConfig } from "./shared/config.js";
+import { addDomainRule, loadConfig, normalizeDomainPattern, saveConfig } from "./shared/config.js";
 
 let config = null;
 let isSaving = false;
@@ -68,19 +68,7 @@ addCurrent.addEventListener("click", async () => {
     }
     const nextConfig = structuredClone(config);
     const pattern = await getCurrentTabPattern();
-    const existingRule = nextConfig.rules.find((rule) => rule.pattern === pattern);
-
-    if (existingRule) {
-      existingRule.proxyId = proxyId;
-      existingRule.enabled = true;
-    } else {
-      nextConfig.rules.push({
-        id: createId("rule"),
-        pattern,
-        proxyId,
-        enabled: true
-      });
-    }
+    addDomainRule(nextConfig, pattern, proxyId);
 
     config = await saveConfig(nextConfig);
     status.textContent = `已添加规则 ${pattern}。`;

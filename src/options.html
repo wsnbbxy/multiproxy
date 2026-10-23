@@ -54,7 +54,8 @@
             <thead>
               <tr>
                 <th>启用</th>
-                <th>域名通配</th>
+                <th>域名（每行一个或逗号分隔）</th>
+                <th>注释</th>
                 <th>使用代理</th>
                 <th></th>
               </tr>
@@ -138,7 +139,8 @@
     <template id="rule-row-template">
       <tr>
         <td><input data-field="enabled" type="checkbox"></td>
-        <td><input data-field="pattern" type="text" placeholder="*.google.com"></td>
+        <td><textarea data-field="patterns" aria-label="域名" rows="3" placeholder="*.google.com&#10;github.com"></textarea></td>
+        <td><input data-field="comment" aria-label="注释" type="text" placeholder="可选，方便识别规则"></td>
         <td><select data-field="proxyId"></select></td>
         <td><button data-action="delete-rule" class="ghost" type="button">删除</button></td>
       </tr>
