@@ -103,6 +103,13 @@ p {
   overflow-x: auto;
 }
 
+.section-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 14px 20px;
+  border-top: 1px solid var(--line);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;

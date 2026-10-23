@@ -1,6 +1,7 @@
 import { createId, loadConfig, normalizeDomainPattern, saveConfig } from "./shared/config.js";
 
 let config = null;
+let isSaving = false;
 
 const enabled = document.querySelector("#enabled");
 const state = document.querySelector("#state");
@@ -13,55 +14,41 @@ const globalProxyEnabled = document.querySelector("#global-proxy-enabled");
 const globalProxyState = document.querySelector("#global-proxy-state");
 
 enabled.addEventListener("change", async () => {
-  if (!config) {
-    enabled.checked = false;
-    status.textContent = "配置尚未加载完成。";
+  const nextEnabled = enabled.checked;
+  if (!beginSave()) {
     return;
   }
 
-  const nextEnabled = enabled.checked;
-  enabled.disabled = true;
-  config.enabled = enabled.checked;
   try {
-    await saveConfig(config);
-    render();
+    const nextConfig = structuredClone(config);
+    nextConfig.enabled = nextEnabled;
+    config = await saveConfig(nextConfig);
     status.textContent = nextEnabled ? "代理已启用。" : "代理已关闭。";
   } catch (error) {
-    config.enabled = !nextEnabled;
-    render();
     status.textContent = `保存失败：${error.message}`;
   } finally {
-    enabled.disabled = false;
+    finishSave();
   }
 });
 
 globalProxyEnabled.addEventListener("change", async () => {
-  if (!config) {
-    globalProxyEnabled.checked = false;
-    status.textContent = "配置尚未加载完成。";
-    return;
-  }
-
-  const proxy = getGlobalProxy();
-  if (!proxy) {
-    globalProxyEnabled.checked = false;
-    status.textContent = "请先在选项页选择全局代理。";
-    return;
-  }
-
   const nextEnabled = globalProxyEnabled.checked;
-  globalProxyEnabled.disabled = true;
-  config.globalProxyEnabled = nextEnabled;
+  if (!beginSave()) {
+    return;
+  }
+
   try {
-    config = await saveConfig(config);
-    render();
+    if (!getGlobalProxy()) {
+      throw new Error("请先在选项页选择全局代理。");
+    }
+    const nextConfig = structuredClone(config);
+    nextConfig.globalProxyEnabled = nextEnabled;
+    config = await saveConfig(nextConfig);
     status.textContent = nextEnabled ? "全局代理已启用。" : "全局代理已关闭。";
   } catch (error) {
-    config.globalProxyEnabled = !nextEnabled;
-    render();
     status.textContent = `保存失败：${error.message}`;
   } finally {
-    globalProxyEnabled.disabled = !getGlobalProxy();
+    finishSave();
   }
 });
 
@@ -70,27 +57,24 @@ document.querySelector("#open-options").addEventListener("click", () => {
 });
 
 addCurrent.addEventListener("click", async () => {
-  if (!config) {
-    status.textContent = "配置尚未加载完成。";
+  if (!beginSave()) {
     return;
   }
 
   const proxyId = proxySelect.value;
-  if (!proxyId) {
-    status.textContent = "请先添加一个代理。";
-    return;
-  }
-
-  addCurrent.disabled = true;
   try {
+    if (!config.proxies.some((proxy) => proxy.id === proxyId)) {
+      throw new Error("请先添加一个代理。");
+    }
+    const nextConfig = structuredClone(config);
     const pattern = await getCurrentTabPattern();
-    const existingRule = config.rules.find((rule) => rule.pattern === pattern);
+    const existingRule = nextConfig.rules.find((rule) => rule.pattern === pattern);
 
     if (existingRule) {
       existingRule.proxyId = proxyId;
       existingRule.enabled = true;
     } else {
-      config.rules.push({
+      nextConfig.rules.push({
         id: createId("rule"),
         pattern,
         proxyId,
@@ -98,23 +82,51 @@ addCurrent.addEventListener("click", async () => {
       });
     }
 
-    config = await saveConfig(config);
-    render();
+    config = await saveConfig(nextConfig);
     status.textContent = `已添加规则 ${pattern}。`;
   } catch (error) {
     status.textContent = error.message;
   } finally {
-    addCurrent.disabled = config ? config.proxies.length === 0 : true;
+    finishSave();
   }
 });
 
+updateControlAvailability();
 init();
+
+function beginSave() {
+  if (!config) {
+    status.textContent = "配置尚未加载完成。";
+    updateControlAvailability();
+    return false;
+  }
+  if (isSaving) {
+    render();
+    return false;
+  }
+  isSaving = true;
+  updateControlAvailability();
+  return true;
+}
+
+function finishSave() {
+  isSaving = false;
+  render();
+}
+
+function updateControlAvailability() {
+  const busy = !config || isSaving;
+  const hasProxies = Boolean(config?.proxies.length);
+  enabled.disabled = busy;
+  globalProxyEnabled.disabled = busy || !getGlobalProxy();
+  proxySelect.disabled = busy || !hasProxies;
+  addCurrent.disabled = busy || !hasProxies;
+}
 
 async function init() {
   try {
     config = await loadConfig();
     render();
-    enabled.disabled = false;
   } catch (error) {
     status.textContent = `加载失败：${error.message}`;
   }
@@ -127,11 +139,11 @@ function render() {
   proxyCount.textContent = String(config.proxies.length);
   ruleCount.textContent = String(config.rules.length);
   globalProxyEnabled.checked = Boolean(config.globalProxyEnabled && globalProxy);
-  globalProxyEnabled.disabled = !globalProxy;
   globalProxyState.textContent = globalProxy
     ? `全局代理：${globalProxy.name}`
     : "全局代理未配置";
   renderProxyOptions();
+  updateControlAvailability();
 }
 
 function renderProxyOptions() {
@@ -148,10 +160,6 @@ function renderProxyOptions() {
   proxySelect.value = config.proxies.some((proxy) => proxy.id === previousValue)
     ? previousValue
     : config.proxies[0]?.id || "";
-
-  const hasProxies = config.proxies.length > 0;
-  proxySelect.disabled = !hasProxies;
-  addCurrent.disabled = !hasProxies;
 }
 
 async function getCurrentTabPattern() {
@@ -204,7 +212,7 @@ function isIpAddress(hostname) {
 }
 
 function getGlobalProxy() {
-  return config.proxies.find((proxy) => proxy.id === config.globalProxyId);
+  return config?.proxies.find((proxy) => proxy.id === config.globalProxyId);
 }
 
 function getStateText(globalProxy) {
